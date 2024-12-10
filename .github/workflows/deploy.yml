@@ -19,12 +19,47 @@ jobs:
         with:
           node-version: 18
           cache: 'npm'
+          
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install
+          npm install -D @jridgewell/gen-mapping @tailwindcss/forms postcss-import postcss-nesting
+
+      - name: Create PostCSS config
+        run: |
+          echo "module.exports = {
+            plugins: {
+              'postcss-import': {},
+              'tailwindcss/nesting': {},
+              tailwindcss: {},
+              autoprefixer: {},
+            }
+          }" > postcss.config.cjs
+
+      - name: Create Tailwind config
+        run: |
+          echo "/** @type {import('tailwindcss').Config} */
+          module.exports = {
+            darkMode: ['class'],
+            content: [
+              './src/**/*.{js,jsx,ts,tsx}',
+              './index.html',
+            ],
+            theme: {
+              extend: {},
+            },
+            plugins: [
+              require('@tailwindcss/forms'),
+              require('tailwindcss-animate')
+            ],
+          }" > tailwind.config.cjs
+
       - name: Build
         run: npm run build
+
       - name: Setup Pages
         uses: actions/configure-pages@v3
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v2
         with:
