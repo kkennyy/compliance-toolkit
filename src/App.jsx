@@ -46,39 +46,19 @@ const PublicRoute = ({ children }) => {
 };
 
 const AppRoutes = () => {
-  const { session, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    );
-  }
-
   return (
     <>
-      {session?.user && <Header />}
+      <Header />
       <div className="container mx-auto px-4 py-8">
         <Routes>
-  <Route path="/login" element={<PublicRoute><LoginForm /></PublicRoute>} />
-  <Route path="/signup" element={<PublicRoute><SignUpForm /></PublicRoute>} />
-  <Route path="/*" element={
-    <PrivateRoute>
-      <Routes>
-        <Route path="/" element={<Assets />}>
-          <Route index element={<AssetList />} />
-          <Route path=":id" element={<AssetDetail />} />
-        </Route>
-        <Route path="/assets/*" element={<Assets />} />
-        <Route path="/counterparties" element={<Counterparties />} />
-        <Route path="/transactions" element={<Transactions />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </PrivateRoute>
-  } />
-</Routes>
+          <Route path="/login" element={<PublicRoute><LoginForm /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute><SignUpForm /></PublicRoute>} />
+          <Route path="/" element={<PrivateRoute><Assets /></PrivateRoute>} />
+          <Route path="/counterparties" element={<PrivateRoute><Counterparties /></PrivateRoute>} />
+          <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />
+          <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
     </>
   );
