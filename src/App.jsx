@@ -1,9 +1,9 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Header from './components/layout/Header';
 import Assets from './pages/Assets';
-import Counterparties from './pages/Counterparties'; 
+import Counterparties from './pages/Counterparties';
 import Transactions from './pages/Transactions';
 import Reports from './pages/Reports';
 import LoginForm from './components/auth/LoginForm';
@@ -12,6 +12,13 @@ import { useAuth } from './hooks/useAuth';
 
 const PrivateRoute = ({ children }) => {
   const { session, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !session?.user) {
+      navigate('/login', { replace: true });
+    }
+  }, [session, loading, navigate]);
 
   if (loading) {
     return (
@@ -21,12 +28,12 @@ const PrivateRoute = ({ children }) => {
     );
   }
 
-  return session ? children : <Navigate to="/login" replace />;
+  return session?.user ? children : null;
 };
 
 const PublicRoute = ({ children }) => {
   const { session, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -35,11 +42,11 @@ const PublicRoute = ({ children }) => {
     );
   }
 
-  return !session ? children : <Navigate to="/" replace />;
+  return !session?.user ? children : <Navigate to="/" replace />;
 };
 
-const App = () => {
-  const { loading } = useAuth();
+const AppRoutes = () => {
+  const { session, loading } = useAuth();
 
   if (loading) {
     return (
@@ -50,8 +57,8 @@ const App = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Header />
+    <>
+      {session?.user && <Header />}
       <div className="container mx-auto px-4 py-8">
         <Routes>
           <Route
@@ -113,16 +120,18 @@ const App = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
-    </div>
+    </>
   );
 };
 
-const AppWrapper = () => {
+const App = () => {
   return (
     <AuthProvider>
-      <App />
+      <div className="min-h-screen bg-gray-100">
+        <AppRoutes />
+      </div>
     </AuthProvider>
   );
 };
 
-export default AppWrapper;
+export default App;
