@@ -31,4 +31,11 @@ const AssetDetail = () => {
       <p>Codename: {asset.codename}</p>
       <p>Business Unit: {asset.business_unit}</p>
       <p>Ownership Type: {asset.ownership_type}</p>
-     
+      <p>Investment Type: {asset.investment_type}</p>
+      <p>Industry: {asset.industry}</p>
+      <p>Status: {asset.status}</p>
+    </Card>
+  );
+};
+
+export default AssetDetail;
