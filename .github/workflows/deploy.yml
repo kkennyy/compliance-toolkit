@@ -16,31 +16,29 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
 
       - name: Install dependencies
-        # This installs all dependencies from package.json
-        # We are NOT installing @jridgewell/gen-mapping manually.
         run: npm install
 
       - name: Create config files
-        # We’re using CommonJS for PostCSS config since your project uses require().
         run: |
-          cat > postcss.config.cjs << 'EOL'
+          # postcss.config.js using CommonJS
+          cat > postcss.config.js << 'EOL'
           module.exports = {
             plugins: [
-              require('postcss-import'),
               require('tailwindcss'),
               require('autoprefixer')
             ]
           }
           EOL
 
-          cat > tailwind.config.cjs << 'EOL'
+          # tailwind.config.js using CommonJS
+          cat > tailwind.config.js << 'EOL'
           /** @type {import('tailwindcss').Config} */
           module.exports = {
             content: [
@@ -54,6 +52,7 @@ jobs:
           }
           EOL
 
+          # vite.config.js remains ESM but that’s okay since it’s code, not config consumed by PostCSS.
           cat > vite.config.js << 'EOL'
           import { defineConfig } from 'vite'
           import react from '@vitejs/plugin-react'
@@ -89,7 +88,6 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
     steps:
