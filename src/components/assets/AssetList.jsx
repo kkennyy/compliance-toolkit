@@ -15,7 +15,17 @@ const AssetList = () => {
   const fetchAssets = async () => {
     const { data, error } = await supabase
       .from('assets')
-      .select('id, name, codename, business_unit, status');
+      .select(`
+        id,
+        name,
+        codename,
+        business_unit,
+        ownership_type,
+        investment_type,
+        industry,
+        status
+      `);
+
     if (!error) {
       setAssets(data);
     }
@@ -26,6 +36,9 @@ const AssetList = () => {
     { key: 'name', label: 'Name' },
     { key: 'codename', label: 'Codename' },
     { key: 'business_unit', label: 'Business Unit' },
+    { key: 'ownership_type', label: 'Ownership Type' },
+    { key: 'investment_type', label: 'Investment Type' },
+    { key: 'industry', label: 'Industry' },
     {
       key: 'status',
       label: 'Status',
@@ -42,36 +55,4 @@ const AssetList = () => {
       )
     },
     {
-      key: 'actions',
-      label: 'Actions',
-      render: (row) => (
-        <Button
-          variant="secondary"
-          size="small"
-          onClick={() => console.log(`View asset ID: ${row.id}`)}
-        >
-          View Details
-        </Button>
-      )
-    }
-  ];
-
-  const handleAddAsset = () => {
-    console.log('Add Asset clicked');
-  };
-
-  if (loading) return <div>Loading...</div>;
-
-  return (
-    <Card title="Assets">
-      <div className="mb-4">
-        <Button variant="primary" onClick={handleAddAsset}>
-          Add Asset
-        </Button>
-      </div>
-      <Table columns={columns} data={assets} />
-    </Card>
-  );
-};
-
-export default AssetList;
+      key: '
