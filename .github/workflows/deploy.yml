@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      
       - uses: actions/setup-node@v3
         with:
           node-version: 18
@@ -23,39 +24,60 @@ jobs:
       - name: Install dependencies
         run: |
           npm install
-          npm install -D @jridgewell/gen-mapping @tailwindcss/forms postcss-import postcss-nesting
+          npm install -D @jridgewell/gen-mapping postcss postcss-import postcss-nesting @tailwindcss/forms tailwindcss-animate autoprefixer
 
-      - name: Create PostCSS config
+      - name: Create config files
         run: |
-          echo "module.exports = {
-            plugins: {
-              'postcss-import': {},
-              'tailwindcss/nesting': {},
-              tailwindcss: {},
-              autoprefixer: {},
-            }
-          }" > postcss.config.cjs
-
-      - name: Create Tailwind config
-        run: |
-          echo "/** @type {import('tailwindcss').Config} */
+          cat > postcss.config.cjs << 'EOL'
           module.exports = {
-            darkMode: ['class'],
+            plugins: [
+              require('postcss-import'),
+              require('tailwindcss'),
+              require('autoprefixer'),
+            ]
+          }
+          EOL
+
+          cat > tailwind.config.cjs << 'EOL'
+          /** @type {import('tailwindcss').Config} */
+          module.exports = {
             content: [
-              './src/**/*.{js,jsx,ts,tsx}',
-              './index.html',
+              "./index.html",
+              "./src/**/*.{js,ts,jsx,tsx}",
             ],
             theme: {
               extend: {},
             },
             plugins: [
               require('@tailwindcss/forms'),
-              require('tailwindcss-animate')
+              require('tailwindcss-animate'),
             ],
-          }" > tailwind.config.cjs
+          }
+          EOL
+
+          cat > vite.config.js << 'EOL'
+          import { defineConfig } from 'vite'
+          import react from '@vitejs/plugin-react'
+          import path from 'path'
+
+          export default defineConfig({
+            plugins: [react()],
+            base: '/compliance-toolkit/',
+            build: {
+              sourcemap: true
+            },
+            resolve: {
+              alias: {
+                '@': path.resolve(__dirname, './src'),
+              },
+            },
+          })
+          EOL
 
       - name: Build
         run: npm run build
+        env:
+          CI: false
 
       - name: Setup Pages
         uses: actions/configure-pages@v3
