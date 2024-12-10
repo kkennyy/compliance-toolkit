@@ -106,3 +106,11 @@ const LoginForm = () => {
             >
               Sign up here
             </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default LoginForm;
