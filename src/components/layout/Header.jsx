@@ -3,7 +3,9 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
 const Header = () => {
+  console.log('Header rendering'); // Add this line
   const { session, loading, signOut } = useAuth();
+  console.log('Header auth state:', { session, loading }); // Add this line
   const navigate = useNavigate();
   const location = useLocation();
 
