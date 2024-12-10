@@ -7,26 +7,36 @@ const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleSignOut = async () => {
+  const handleSignOut = async (e) => {
+    e.preventDefault();
     try {
-      await signOut();
-      navigate('/login');
+      const { error } = await signOut();
+      if (!error) {
+        navigate('/login');
+      }
     } catch (error) {
       console.error('Sign out error:', error);
     }
   };
 
-  // Don't render anything while loading or if no session
-  if (loading || !session) {
+  // Don't render during loading or without session
+  if (loading || !session?.user) {
     return null;
   }
 
   const menuItems = [
-    { path: '/', label: 'Assets' },
+    { path: '/', label: 'Assets', exact: true },
     { path: '/counterparties', label: 'Counterparties' },
     { path: '/transactions', label: 'Transactions' },
     { path: '/reports', label: 'Reports' }
   ];
+
+  const isCurrentPath = (path, exact = false) => {
+    if (exact) {
+      return location.pathname === path;
+    }
+    return location.pathname.startsWith(path);
+  };
 
   return (
     <header className="bg-white shadow">
@@ -44,7 +54,7 @@ const Header = () => {
                   key={item.path}
                   to={item.path}
                   className={`px-3 py-2 rounded-md text-sm font-medium ${
-                    location.pathname === item.path
+                    isCurrentPath(item.path, item.exact)
                       ? 'bg-gray-100 text-gray-900'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                   }`}
@@ -54,19 +64,19 @@ const Header = () => {
               ))}
             </nav>
           </div>
-          {session && (
-            <div className="flex items-center">
+          <div className="flex items-center">
+            {session?.user?.email && (
               <span className="text-sm text-gray-600 mr-4">
-                {session.user?.email}
+                {session.user.email}
               </span>
-              <button
-                onClick={handleSignOut}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
-              >
-                Sign out
-              </button>
-            </div>
-          )}
+            )}
+            <button
+              onClick={handleSignOut}
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </div>
     </header>
