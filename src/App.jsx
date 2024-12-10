@@ -8,6 +8,7 @@ import Transactions from './pages/Transactions';
 import Reports from './pages/Reports';
 import LoginForm from './components/auth/LoginForm';
 import SignUpForm from './components/auth/SignUpForm'; // Add this import
+import { useAuth } from './hooks/useAuth';
 
 const PrivateRoute = ({ children }) => {
   const { session } = useAuth();
@@ -31,7 +32,30 @@ const App = () => {
                 </PrivateRoute>
               }
             />
-            {/* ... other routes ... */}
+            <Route
+              path="/counterparties"
+              element={
+                <PrivateRoute>
+                  <Counterparties />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/transactions"
+              element={
+                <PrivateRoute>
+                  <Transactions />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <PrivateRoute>
+                  <Reports />
+                </PrivateRoute>
+              }
+            />
           </Routes>
         </div>
       </div>
