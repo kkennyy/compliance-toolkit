@@ -18,23 +18,27 @@ const Assets = () => {
   }, []);
 
   const fetchAssets = async () => {
-    const { data, error } = await supabase
-      .from('assets')
-      .select(`
-        id,
-        name,
-        codename,
-        business_unit,
-        ownership_type,
-        investment_type,
-        industry,
-        status
-      `);
+    try {
+      const { data, error } = await supabase
+        .from('assets')
+        .select(`
+          id,
+          name,
+          codename,
+          business_unit,
+          ownership_type,
+          investment_type,
+          industry,
+          status
+        `);
 
-    if (!error) {
+      if (error) throw error;
       setAssets(data);
+    } catch (error) {
+      console.error('Error fetching assets:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const columns = [
@@ -98,21 +102,26 @@ const Assets = () => {
   };
 
   const handleSubmit = async (formData) => {
-    if (selectedAsset) {
-      // Edit existing asset
-      await supabase
-        .from('assets')
-        .update(formData)
-        .eq('id', selectedAsset.id);
-    } else {
-      // Add new asset
-      await supabase
-        .from('assets')
-        .insert(formData);
-    }
+    try {
+      if (selectedAsset) {
+        // Edit existing asset
+        const { error } = await supabase
+          .from('assets')
+          .update(formData)
+          .eq('id', selectedAsset.id);
 
-    setShowModal(false);
-    fetchAssets(); // Refresh the asset list
+        if (error) throw error;
+      } else {
+        // Add new asset
+        const { error } = await supabase.from('assets').insert(formData);
+        if (error) throw error;
+      }
+
+      setShowModal(false);
+      fetchAssets(); // Refresh the asset list
+    } catch (error) {
+      console.error('Error saving asset:', error);
+    }
   };
 
   if (loading) return <div>Loading...</div>;
