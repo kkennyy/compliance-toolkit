@@ -1,80 +1,76 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../config/supabaseClient';
-import { useAssets } from '../../hooks/useAssets';
-import AssetModal from './AssetModal';
+import Table from '../shared/Table';
+import Card from '../shared/Card';
+import Button from '../shared/Button';
 
 const AssetList = () => {
-  const { assets = [], loading, error, refetch } = useAssets();
-  const navigate = useNavigate();
-  const [showModal, setShowModal] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [assets, setAssets] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleAddAsset = async (assetData) => {
-    try {
-      const { error } = await supabase.from('assets').insert([assetData]).single();
-      if (error) throw error;
-      refetch();
-      setShowModal(false);
-    } catch (error) {
-      console.error('Error adding asset:', error);
+  useEffect(() => {
+    fetchAssets();
+  }, []);
+
+  const fetchAssets = async () => {
+    const { data, error } = await supabase
+      .from('assets')
+      .select('id, name, codename, business_unit, status');
+    if (!error) {
+      setAssets(data);
     }
+    setLoading(false);
   };
 
-  const handleEditAsset = async (assetData) => {
-    try {
-      const { error } = await supabase
-        .from('assets')
-        .update(assetData)
-        .eq('id', selectedAsset.id)
-        .single();
-      if (error) throw error;
-      refetch();
-      setShowModal(false);
-      setSelectedAsset(null);
-    } catch (error) {
-      console.error('Error updating asset:', error);
+  const columns = [
+    { key: 'name', label: 'Name' },
+    { key: 'codename', label: 'Codename' },
+    { key: 'business_unit', label: 'Business Unit' },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (row) => (
+        <span
+          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+            row.status === 'Invested'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-gray-100 text-gray-800'
+          }`}
+        >
+          {row.status || 'Unknown'}
+        </span>
+      )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (row) => (
+        <Button
+          variant="secondary"
+          size="small"
+          onClick={() => console.log(`View asset ID: ${row.id}`)}
+        >
+          View Details
+        </Button>
+      )
     }
-  };
+  ];
 
-  const addSampleData = async () => {
-    const sampleAssets = [
-      { name: 'Sample Asset 1', codename: 'S1', business_unit: 'Unit 1', status: 'Active' },
-      { name: 'Sample Asset 2', codename: 'S2', business_unit: 'Unit 2', status: 'Inactive' },
-    ];
-    try {
-      const { error } = await supabase.from('assets').insert(sampleAssets);
-      if (error) throw error;
-      refetch();
-    } catch (error) {
-      console.error('Error adding sample data:', error);
-    }
+  const handleAddAsset = () => {
+    console.log('Add Asset clicked');
   };
 
   if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
 
   return (
-    <div>
-      <h1>Assets</h1>
-      <button onClick={() => addSampleData()}>Add Sample Data</button>
-      <ul>
-        {assets.map((asset) => (
-          <li key={asset.id}>
-            {asset.name} - {asset.codename}
-            <button onClick={() => navigate(`/assets/${asset.id}`)}>View</button>
-          </li>
-        ))}
-      </ul>
-      {showModal && (
-        <AssetModal
-          isOpen={showModal}
-          onClose={() => setShowModal(false)}
-          onSubmit={selectedAsset ? handleEditAsset : handleAddAsset}
-          initialData={selectedAsset}
-        />
-      )}
-    </div>
+    <Card title="Assets">
+      <div className="mb-4">
+        <Button variant="primary" onClick={handleAddAsset}>
+          Add Asset
+        </Button>
+      </div>
+      <Table columns={columns} data={assets} />
+    </Card>
   );
 };
 
