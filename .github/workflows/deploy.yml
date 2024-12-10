@@ -27,7 +27,6 @@ jobs:
 
       - name: Create config files
         run: |
-          # postcss.config.js using CommonJS
           cat > postcss.config.js << 'EOL'
           module.exports = {
             plugins: [
@@ -37,7 +36,6 @@ jobs:
           }
           EOL
 
-          # tailwind.config.js using CommonJS
           cat > tailwind.config.js << 'EOL'
           /** @type {import('tailwindcss').Config} */
           module.exports = {
@@ -52,7 +50,6 @@ jobs:
           }
           EOL
 
-          # vite.config.js remains ESM but that’s okay since it’s code, not config consumed by PostCSS.
           cat > vite.config.js << 'EOL'
           import { defineConfig } from 'vite'
           import react from '@vitejs/plugin-react'
