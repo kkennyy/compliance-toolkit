@@ -1,67 +1,58 @@
 import React, { useState } from 'react';
-import { supabase } from '../../config/supabaseClient';
-import { useAuth } from '../../hooks/useAuth';
+import Card from '../shared/Card';
+import Button from '../shared/Button';
 
-const AssetForm = ({ asset, onSubmit, onCancel }) => {
-  const { session } = useAuth();
-  const [formData, setFormData] = useState(asset || {
-    name: '',
-    codename: '',
-    description: '',
-    business_unit: '',
-    ownership_type: '',
-    investment_type: '',
-    jurisdictions: [],
-    industry: '',
-    status: 'Pending'
+const AssetForm = ({ initialData = {}, onSubmit, onCancel }) => {
+  const [formData, setFormData] = useState({
+    name: initialData.name || '',
+    codename: initialData.codename || '',
+    description: initialData.description || ''
   });
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    const { data, error } = asset?.id
-      ? await supabase
-          .from('assets')
-          .update(formData)
-          .eq('id', asset.id)
-      : await supabase
-          .from('assets')
-          .insert({ ...formData, created_by: session.user.id });
-
-    if (error) {
-      console.error('Error saving asset:', error);
-      return;
-    }
-    onSubmit(data);
+    onSubmit(formData);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Name</label>
-        <input
-          type="text"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-        />
-      </div>
-      {/* Add other fields similarly */}
-      <div className="flex justify-end space-x-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 border rounded-md text-gray-700"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="px-4 py-2 bg-blue-500 text-white rounded-md"
-        >
-          Save
-        </button>
-      </div>
-    </form>
+    <Card title="Asset Form">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label>Name</label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="w-full p-2 border rounded"
+          />
+        </div>
+        <div>
+          <label>Codename</label>
+          <input
+            type="text"
+            value={formData.codename}
+            onChange={(e) => setFormData({ ...formData, codename: e.target.value })}
+            className="w-full p-2 border rounded"
+          />
+        </div>
+        <div>
+          <label>Description</label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="w-full p-2 border rounded"
+          />
+        </div>
+        <div className="flex justify-end space-x-4">
+          <Button type="button" variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary">
+            Save
+          </Button>
+        </div>
+      </form>
+    </Card>
   );
 };
 
