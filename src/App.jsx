@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Header from './components/layout/Header';
 import Assets from './pages/Assets';
@@ -11,109 +11,118 @@ import SignUpForm from './components/auth/SignUpForm';
 import { useAuth } from './hooks/useAuth';
 
 const PrivateRoute = ({ children }) => {
- const { session, loading } = useAuth();
- const navigate = useNavigate();
+  const { session, loading } = useAuth();
 
- React.useEffect(() => {
-   if (!loading && !session) {
-     navigate('/login');
-   }
- }, [session, loading, navigate]);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
 
- if (loading) {
-   return (
-     <div className="flex items-center justify-center min-h-screen">
-       <div className="text-gray-600">Loading...</div>
-     </div>
-   );
- }
-
- return session ? children : null;
+  return session ? children : <Navigate to="/login" replace />;
 };
 
 const PublicRoute = ({ children }) => {
- const { session, loading } = useAuth();
- 
- if (loading) {
-   return (
-     <div className="flex items-center justify-center min-h-screen">
-       <div className="text-gray-600">Loading...</div>
-     </div>
-   );
- }
+  const { session, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
 
- return !session ? children : <Navigate to="/" />;
+  return !session ? children : <Navigate to="/" replace />;
 };
 
 const App = () => {
- return (
-   <AuthProvider>
-     <div className="min-h-screen bg-gray-100">
-       <Header />
-       <div className="container mx-auto px-4 py-8">
-         <Routes>
-           <Route
-             path="/login"
-             element={
-               <PublicRoute>
-                 <LoginForm />
-               </PublicRoute>
-             }
-           />
-           <Route
-             path="/signup"
-             element={
-               <PublicRoute>
-                 <SignUpForm />
-               </PublicRoute>
-             }
-           />
-           <Route
-             path="/"
-             element={
-               <PrivateRoute>
-                 <Assets />
-               </PrivateRoute>
-             }
-           />
-           <Route
-             path="/assets/*"
-             element={
-               <PrivateRoute>
-                 <Assets />
-               </PrivateRoute>
-             }
-           />
-           <Route
-             path="/counterparties"
-             element={
-               <PrivateRoute>
-                 <Counterparties />
-               </PrivateRoute>
-             }
-           />
-           <Route
-             path="/transactions"
-             element={
-               <PrivateRoute>
-                 <Transactions />
-               </PrivateRoute>
-             }
-           />
-           <Route
-             path="/reports"
-             element={
-               <PrivateRoute>
-                 <Reports />
-               </PrivateRoute>
-             }
-           />
-           <Route path="*" element={<Navigate to="/" replace />} />
-         </Routes>
-       </div>
-     </div>
-   </AuthProvider>
- );
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <Header />
+      <div className="container mx-auto px-4 py-8">
+        <Routes>
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <LoginForm />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/signup"
+            element={
+              <PublicRoute>
+                <SignUpForm />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/"
+            element={
+              <PrivateRoute>
+                <Assets />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/assets/*"
+            element={
+              <PrivateRoute>
+                <Assets />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/counterparties"
+            element={
+              <PrivateRoute>
+                <Counterparties />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/transactions"
+            element={
+              <PrivateRoute>
+                <Transactions />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <PrivateRoute>
+                <Reports />
+              </PrivateRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </div>
+  );
 };
 
-export default App;
+const AppWrapper = () => {
+  return (
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  );
+};
+
+export default AppWrapper;
