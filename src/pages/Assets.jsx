@@ -20,6 +20,9 @@ const Assets = () => {
         name,
         codename,
         business_unit,
+        ownership_type,
+        investment_type,
+        industry,
         status
       `);
 
@@ -33,6 +36,9 @@ const Assets = () => {
     { key: 'name', label: 'Name' },
     { key: 'codename', label: 'Codename' },
     { key: 'business_unit', label: 'Business Unit' },
+    { key: 'ownership_type', label: 'Ownership Type' },
+    { key: 'investment_type', label: 'Investment Type' },
+    { key: 'industry', label: 'Industry' },
     {
       key: 'status',
       label: 'Status',
@@ -55,7 +61,7 @@ const Assets = () => {
         <Button
           variant="secondary"
           size="small"
-          onClick={() => handleView(row.id)}
+          onClick={() => console.log(`View Asset ID: ${row.id}`)}
         >
           View Details
         </Button>
@@ -63,12 +69,8 @@ const Assets = () => {
     }
   ];
 
-  const handleAdd = () => {
+  const handleAddAsset = () => {
     console.log('Add Asset clicked');
-  };
-
-  const handleView = (id) => {
-    console.log(`View Asset ID: ${id}`);
   };
 
   if (loading) return <div>Loading...</div>;
@@ -76,15 +78,11 @@ const Assets = () => {
   return (
     <Card title="Assets">
       <div className="mb-4">
-        <Button variant="primary" onClick={handleAdd}>
+        <Button variant="primary" onClick={handleAddAsset}>
           Add Asset
         </Button>
       </div>
-      <Table
-        columns={columns}
-        data={assets}
-        onRowClick={(row) => handleView(row.id)}
-      />
+      <Table columns={columns} data={assets} />
     </Card>
   );
 };
