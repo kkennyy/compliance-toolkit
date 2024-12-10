@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../config/supabaseClient';
 import Table from '../components/shared/Table';
 import Card from '../components/shared/Card';
 import Button from '../components/shared/Button';
+import AssetModal from '../components/assets/AssetModal';
 
 const Assets = () => {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchAssets();
@@ -58,32 +63,79 @@ const Assets = () => {
       key: 'actions',
       label: 'Actions',
       render: (row) => (
-        <Button
-          variant="secondary"
-          size="small"
-          onClick={() => console.log(`View Asset ID: ${row.id}`)}
-        >
-          View Details
-        </Button>
+        <div className="flex space-x-2">
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => handleView(row.id)}
+          >
+            View Details
+          </Button>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => handleEdit(row)}
+          >
+            Edit
+          </Button>
+        </div>
       )
     }
   ];
 
   const handleAddAsset = () => {
-    console.log('Add Asset clicked');
+    setSelectedAsset(null); // Clear the selected asset for adding a new one
+    setShowModal(true);
+  };
+
+  const handleEdit = (asset) => {
+    setSelectedAsset(asset); // Set the selected asset for editing
+    setShowModal(true);
+  };
+
+  const handleView = (id) => {
+    navigate(`/assets/${id}`);
+  };
+
+  const handleSubmit = async (formData) => {
+    if (selectedAsset) {
+      // Edit existing asset
+      await supabase
+        .from('assets')
+        .update(formData)
+        .eq('id', selectedAsset.id);
+    } else {
+      // Add new asset
+      await supabase
+        .from('assets')
+        .insert(formData);
+    }
+
+    setShowModal(false);
+    fetchAssets(); // Refresh the asset list
   };
 
   if (loading) return <div>Loading...</div>;
 
   return (
-    <Card title="Assets">
-      <div className="mb-4">
-        <Button variant="primary" onClick={handleAddAsset}>
-          Add Asset
-        </Button>
-      </div>
-      <Table columns={columns} data={assets} />
-    </Card>
+    <>
+      <Card title="Assets">
+        <div className="mb-4">
+          <Button variant="primary" onClick={handleAddAsset}>
+            Add Asset
+          </Button>
+        </div>
+        <Table columns={columns} data={assets} />
+      </Card>
+      {showModal && (
+        <AssetModal
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+          onSubmit={handleSubmit}
+          initialData={selectedAsset}
+        />
+      )}
+    </>
   );
 };
 
