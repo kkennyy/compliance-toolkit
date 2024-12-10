@@ -137,4 +137,69 @@ const AssetList = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Codename</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Business U
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Business Unit</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {Array.isArray(assets) && assets.map((asset) => (
+                asset && asset.id ? (
+                  <tr key={asset.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {asset?.name || 'Untitled'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {asset?.codename || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {asset?.business_unit || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        asset?.status === 'Invested' 
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {asset?.status || 'Unknown'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <button
+                        onClick={() => navigate(`/assets/${asset.id}`)}
+                        className="text-blue-600 hover:text-blue-900 mr-4"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedAsset(asset);
+                          setShowModal(true);
+                        }}
+                        className="text-gray-600 hover:text-gray-900"
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ) : null
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AssetModal
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setSelectedAsset(null);
+        }}
+        onSubmit={selectedAsset ? handleEditAsset : handleAddAsset}
+        initialData={selectedAsset}
+      />
+    </div>
+  );
+};
+
+export default AssetList;
