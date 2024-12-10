@@ -1,17 +1,32 @@
 import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
 const Header = () => {
-  const { session, signOut } = useAuth();
+  const { session, loading, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSignOut = async () => {
-    await signOut();
-    navigate('/login');
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
   };
 
-  if (!session) return null;
+  // Don't render anything while loading or if no session
+  if (loading || !session) {
+    return null;
+  }
+
+  const menuItems = [
+    { path: '/', label: 'Assets' },
+    { path: '/counterparties', label: 'Counterparties' },
+    { path: '/transactions', label: 'Transactions' },
+    { path: '/reports', label: 'Reports' }
+  ];
 
   return (
     <header className="bg-white shadow">
@@ -19,45 +34,39 @@ const Header = () => {
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <span className="text-2xl font-bold text-gray-900">
+              <Link to="/" className="text-2xl font-bold text-gray-900">
                 Compliance Toolkit
-              </span>
+              </Link>
             </div>
             <nav className="ml-6 flex space-x-4">
-              <Link
-                to="/"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-900 hover:bg-gray-50"
-              >
-                Assets
-              </Link>
-              <Link
-                to="/counterparties"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-900 hover:bg-gray-50"
-              >
-                Counterparties
-              </Link>
-              <Link
-                to="/transactions"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-900 hover:bg-gray-50"
-              >
-                Transactions
-              </Link>
-              <Link
-                to="/reports"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-900 hover:bg-gray-50"
-              >
-                Reports
-              </Link>
+              {menuItems.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`px-3 py-2 rounded-md text-sm font-medium ${
+                    location.pathname === item.path
+                      ? 'bg-gray-100 text-gray-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
             </nav>
           </div>
-          <div className="flex items-center">
-            <button
-              onClick={handleSignOut}
-              className="ml-4 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Sign out
-            </button>
-          </div>
+          {session && (
+            <div className="flex items-center">
+              <span className="text-sm text-gray-600 mr-4">
+                {session.user?.email}
+              </span>
+              <button
+                onClick={handleSignOut}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>
