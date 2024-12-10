@@ -23,18 +23,19 @@ jobs:
           node-version: 18
 
       - name: Install dependencies
-        run: |
-          npm install
-          npm install -D @jridgewell/gen-mapping postcss postcss-import postcss-nesting @tailwindcss/forms tailwindcss-animate autoprefixer
+        # This installs all dependencies from package.json
+        # We are NOT installing @jridgewell/gen-mapping manually.
+        run: npm install
 
       - name: Create config files
+        # We’re using CommonJS for PostCSS config since your project uses require().
         run: |
           cat > postcss.config.cjs << 'EOL'
           module.exports = {
             plugins: [
               require('postcss-import'),
               require('tailwindcss'),
-              require('autoprefixer'),
+              require('autoprefixer')
             ]
           }
           EOL
@@ -49,10 +50,7 @@ jobs:
             theme: {
               extend: {},
             },
-            plugins: [
-              require('@tailwindcss/forms'),
-              require('tailwindcss-animate'),
-            ],
+            plugins: [],
           }
           EOL
 
