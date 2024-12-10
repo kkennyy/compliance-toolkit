@@ -7,7 +7,7 @@ import Counterparties from './pages/Counterparties';
 import Transactions from './pages/Transactions';
 import Reports from './pages/Reports';
 import LoginForm from './components/auth/LoginForm';
-import { useAuth } from './hooks/useAuth';
+import SignUpForm from './components/auth/SignUpForm'; // Add this import
 
 const PrivateRoute = ({ children }) => {
   const { session } = useAuth();
@@ -22,6 +22,7 @@ const App = () => {
         <div className="container mx-auto px-4 py-8">
           <Routes>
             <Route path="/login" element={<LoginForm />} />
+            <Route path="/signup" element={<SignUpForm />} /> {/* Add this route */}
             <Route
               path="/"
               element={
@@ -30,30 +31,7 @@ const App = () => {
                 </PrivateRoute>
               }
             />
-            <Route
-              path="/counterparties"
-              element={
-                <PrivateRoute>
-                  <Counterparties />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/transactions"
-              element={
-                <PrivateRoute>
-                  <Transactions />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/reports"
-              element={
-                <PrivateRoute>
-                  <Reports />
-                </PrivateRoute>
-              }
-            />
+            {/* ... other routes ... */}
           </Routes>
         </div>
       </div>
