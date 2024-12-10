@@ -53,7 +53,7 @@ const AssetModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500"
             />
           </div>
-          {/* Add other fields here as necessary */}
+          {/* Add other fields as necessary */}
           <div className="flex justify-end space-x-3">
             <button
               type="button"
