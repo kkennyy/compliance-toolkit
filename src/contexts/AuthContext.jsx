@@ -9,78 +9,99 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Initial session check
+    let mounted = true;
+
     const initializeAuth = async () => {
       try {
-        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+        // Get initial session
+        const { data, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
-        setSession(initialSession);
+        
+        if (mounted) {
+          setSession(data.session);
+          setLoading(false);
+        }
       } catch (err) {
-        setError(err.message);
+        if (mounted) {
+          setError(err.message);
+          setSession(null);
+          setLoading(false);
+        }
         console.error('Auth initialization error:', err);
-      } finally {
-        setLoading(false);
       }
     };
 
     initializeAuth();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setLoading(false);
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
+      if (mounted) {
+        setSession(currentSession);
+        setLoading(false);
+
+        // Log auth state changes for debugging
+        console.log('Auth state changed:', event, currentSession);
+      }
     });
 
-    // Cleanup subscription
+    // Cleanup
     return () => {
-      if (subscription) subscription.unsubscribe();
+      mounted = false;
+      subscription?.unsubscribe();
     };
   }, []);
+
+  const signUp = async (data) => {
+    try {
+      setLoading(true);
+      const { data: authData, error } = await supabase.auth.signUp(data);
+      if (error) throw error;
+      return { data: authData, error: null };
+    } catch (err) {
+      console.error('Sign up error:', err);
+      return { data: null, error: err.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signIn = async (data) => {
+    try {
+      setLoading(true);
+      const { data: authData, error } = await supabase.auth.signInWithPassword(data);
+      if (error) throw error;
+      return { data: authData, error: null };
+    } catch (err) {
+      console.error('Sign in error:', err);
+      return { data: null, error: err.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setSession(null);
+      return { error: null };
+    } catch (err) {
+      console.error('Sign out error:', err);
+      return { error: err.message };
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const value = {
     session,
     loading,
     error,
-    signUp: async (data) => {
-      try {
-        const { data: authData, error } = await supabase.auth.signUp(data);
-        if (error) throw error;
-        return { data: authData, error: null };
-      } catch (err) {
-        console.error('Sign up error:', err);
-        return { data: null, error: err.message };
-      }
-    },
-    signIn: async (data) => {
-      try {
-        const { data: authData, error } = await supabase.auth.signInWithPassword(data);
-        if (error) throw error;
-        return { data: authData, error: null };
-      } catch (err) {
-        console.error('Sign in error:', err);
-        return { data: null, error: err.message };
-      }
-    },
-    signOut: async () => {
-      try {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
-        return { error: null };
-      } catch (err) {
-        console.error('Sign out error:', err);
-        return { error: err.message };
-      }
-    }
+    signUp,
+    signIn,
+    signOut
   };
-
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <AuthContext.Provider value={value}>
