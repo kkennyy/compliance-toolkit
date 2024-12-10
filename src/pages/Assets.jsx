@@ -7,7 +7,7 @@ const Assets = () => {
   return (
     <Routes>
       <Route path="/" element={<AssetList />} />
-      <Route path="/:id" element={<AssetDetail />} />
+      <Route path="/:id/*" element={<AssetDetail />} />
     </Routes>
   );
 };
