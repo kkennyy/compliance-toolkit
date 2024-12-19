@@ -449,17 +449,17 @@ CREATE POLICY "Users can edit assets they have edit access to"
   );
 
 -- Create RLS policies for reference data
-CREATE POLICY "Allow read access to reference data for authenticated users"
+CREATE POLICY "Allow authenticated users to read business units"
   ON business_units FOR SELECT
   TO authenticated
   USING (true);
 
-CREATE POLICY "Allow read access to reference data for authenticated users"
+CREATE POLICY "Allow authenticated users to read industries"
   ON industries FOR SELECT
   TO authenticated
   USING (true);
 
-CREATE POLICY "Allow read access to reference data for authenticated users"
+CREATE POLICY "Allow authenticated users to read currencies"
   ON currencies FOR SELECT
   TO authenticated
   USING (true);

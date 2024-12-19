@@ -54,31 +54,68 @@ const AssetModal = ({ isOpen, onClose }) => {
     setLoading(true);
     setError(null);
 
+    // Validate required fields
+    const requiredFields = {
+      name: 'Name',
+      business_unit_id: 'Business Unit',
+      industry_id: 'Industry',
+      currency_id: 'Currency',
+      ownership_type: 'Ownership Type',
+      investment_type: 'Investment Type'
+    };
+
+    for (const [field, label] of Object.entries(requiredFields)) {
+      if (!formData[field]) {
+        setError(`${label} is required`);
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
-      const { data, error } = await supabase
+      console.log('Submitting form data:', formData);
+
+      // First check if we're authenticated
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw new Error('Authentication error. Please sign in again.');
+      if (!user) throw new Error('No authenticated user found');
+
+      // Create the asset
+      const { data: asset, error: assetError } = await supabase
         .from('assets')
-        .insert([formData])
+        .insert([{
+          ...formData,
+          status: 'Pending' // Set initial status
+        }])
         .select()
         .single();
 
-      if (error) throw error;
+      if (assetError) {
+        console.error('Supabase error details:', assetError);
+        throw new Error(assetError.message);
+      }
+
+      console.log('Created asset:', asset);
 
       // Grant access to the creator
       const { error: accessError } = await supabase
         .from('asset_access')
         .insert([{
-          asset_id: data.id,
-          user_id: (await supabase.auth.getUser()).data.user.id,
+          asset_id: asset.id,
+          user_id: user.id,
           can_view: true,
           can_edit: true
         }]);
 
-      if (accessError) throw accessError;
+      if (accessError) {
+        console.error('Access error details:', accessError);
+        throw new Error('Failed to set up asset access');
+      }
 
       onClose(true); // Refresh the asset list
     } catch (error) {
       console.error('Error creating asset:', error);
-      setError('Failed to create asset. Please try again.');
+      setError(error.message || 'Failed to create asset. Please try again.');
     } finally {
       setLoading(false);
     }
