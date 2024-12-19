@@ -117,28 +117,116 @@ create index if not exists idx_asset_access_user_id on asset_access(user_id);
 -- Enable RLS on asset_access
 alter table asset_access enable row level security;
 
--- Create policies for asset_access
+-- Enable RLS on all tables
+ALTER TABLE business_units ENABLE ROW LEVEL SECURITY;
+ALTER TABLE industries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE currencies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE asset_access ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies
+DO $$ 
+BEGIN
+    -- Drop policies for business_units
+    DROP POLICY IF EXISTS "Allow authenticated users to read business units" ON business_units;
+    
+    -- Drop policies for industries
+    DROP POLICY IF EXISTS "Allow authenticated users to read industries" ON industries;
+    
+    -- Drop policies for currencies
+    DROP POLICY IF EXISTS "Allow authenticated users to read currencies" ON currencies;
+    
+    -- Drop policies for assets
+    DROP POLICY IF EXISTS "Users can view assets they have access to" ON assets;
+    DROP POLICY IF EXISTS "Users can create assets" ON assets;
+    DROP POLICY IF EXISTS "Users can edit assets they have edit access to" ON assets;
+    DROP POLICY IF EXISTS "Users can delete assets they have edit access to" ON assets;
+    
+    -- Drop policies for asset_access
+    DROP POLICY IF EXISTS "Users can view their own access" ON asset_access;
+    DROP POLICY IF EXISTS "Users can create their own access" ON asset_access;
+END $$;
+
+-- Create RLS policies for reference data
+CREATE POLICY "Allow authenticated users to read business units"
+  ON business_units FOR SELECT
+  TO authenticated
+  USING (true);
+
+CREATE POLICY "Allow authenticated users to read industries"
+  ON industries FOR SELECT
+  TO authenticated
+  USING (true);
+
+CREATE POLICY "Allow authenticated users to read currencies"
+  ON currencies FOR SELECT
+  TO authenticated
+  USING (true);
+
+-- Create RLS policies for asset_access
 CREATE POLICY "Users can view their own access"
   ON asset_access FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can create initial access"
+CREATE POLICY "Users can create their own access"
   ON asset_access FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Asset editors can manage access"
-  ON asset_access FOR ALL
+-- Create RLS policies for assets
+CREATE POLICY "Users can view assets they have access to"
+  ON assets FOR SELECT
   TO authenticated
   USING (
     EXISTS (
       SELECT 1 FROM asset_access aa
-      WHERE aa.asset_id = asset_access.asset_id
+      WHERE aa.asset_id = id
+      AND aa.user_id = auth.uid()
+      AND aa.can_view = true
+    )
+  );
+
+CREATE POLICY "Users can create assets"
+  ON assets FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+CREATE POLICY "Users can edit assets they have edit access to"
+  ON assets FOR UPDATE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM asset_access aa
+      WHERE aa.asset_id = id
       AND aa.user_id = auth.uid()
       AND aa.can_edit = true
     )
   );
+
+CREATE POLICY "Users can delete assets they have edit access to"
+  ON assets FOR DELETE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM asset_access aa
+      WHERE aa.asset_id = id
+      AND aa.user_id = auth.uid()
+      AND aa.can_edit = true
+    )
+  );
+
+-- Add unique constraint for codename if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_constraint 
+        WHERE conname = 'unique_codename'
+    ) THEN
+        ALTER TABLE assets ADD CONSTRAINT unique_codename UNIQUE (codename);
+    END IF;
+END$$;
 
 -- Grant all users access to their own assets by default
 insert into asset_access (asset_id, user_id, can_view, can_edit)
@@ -416,120 +504,6 @@ WHERE NOT EXISTS (
   WHERE aa.asset_id = a.id
   AND aa.user_id = auth.uid()
 );
-
--- Enable RLS on all tables
-ALTER TABLE business_units ENABLE ROW LEVEL SECURITY;
-ALTER TABLE industries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE currencies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE assets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE asset_access ENABLE ROW LEVEL SECURITY;
-
--- Drop existing policies first
-DO $$ 
-BEGIN
-    EXECUTE (
-        SELECT string_agg(
-            format('DROP POLICY IF EXISTS %I ON %I', 
-                   pol.policyname, 
-                   pol.tablename),
-            '; ')
-        FROM pg_policies pol
-        WHERE pol.schemaname = 'public'
-    );
-END $$;
-
--- Create RLS policies for reference data
-CREATE POLICY "Allow authenticated users to read business units"
-  ON business_units FOR SELECT
-  TO authenticated
-  USING (true);
-
-CREATE POLICY "Allow authenticated users to read industries"
-  ON industries FOR SELECT
-  TO authenticated
-  USING (true);
-
-CREATE POLICY "Allow authenticated users to read currencies"
-  ON currencies FOR SELECT
-  TO authenticated
-  USING (true);
-
--- Create RLS policies for asset_access
-CREATE POLICY "Users can view their own access"
-  ON asset_access FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can create initial access"
-  ON asset_access FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Asset editors can manage access"
-  ON asset_access FOR ALL
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM asset_access aa
-      WHERE aa.asset_id = asset_access.asset_id
-      AND aa.user_id = auth.uid()
-      AND aa.can_edit = true
-    )
-  );
-
--- Create RLS policies for assets
-CREATE POLICY "Users can view assets they have access to"
-  ON assets FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM asset_access aa
-      WHERE aa.asset_id = id
-      AND aa.user_id = auth.uid()
-      AND aa.can_view = true
-    )
-  );
-
-CREATE POLICY "Users can create assets"
-  ON assets FOR INSERT
-  TO authenticated
-  WITH CHECK (true);
-
-CREATE POLICY "Users can edit assets they have edit access to"
-  ON assets FOR UPDATE
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM asset_access aa
-      WHERE aa.asset_id = id
-      AND aa.user_id = auth.uid()
-      AND aa.can_edit = true
-    )
-  );
-
-CREATE POLICY "Users can delete assets they have edit access to"
-  ON assets FOR DELETE
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM asset_access aa
-      WHERE aa.asset_id = id
-      AND aa.user_id = auth.uid()
-      AND aa.can_edit = true
-    )
-  );
-
--- Add unique constraint for codename if it doesn't exist
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 
-        FROM pg_constraint 
-        WHERE conname = 'unique_codename'
-    ) THEN
-        ALTER TABLE assets ADD CONSTRAINT unique_codename UNIQUE (codename);
-    END IF;
-END$$;
 
 -- Re-create document policies with correct access control
 CREATE POLICY "Users can view documents they have access to"

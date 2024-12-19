@@ -22,16 +22,28 @@ const AssetList = () => {
       setLoading(true);
       setError(null);
 
+      // First check if we're authenticated
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw new Error('Authentication error. Please sign in again.');
+      if (!user) throw new Error('No authenticated user found');
+
       const { data: assetsData, error: assetsError } = await supabase
         .from('assets')
         .select(`
-          *,
-          business_unit:business_units(name),
-          industry:industries(name),
-          currency:currencies(code)
-        `);
+          id,
+          name,
+          codename,
+          business_unit:business_unit_id(id, name),
+          industry:industry_id(id, name),
+          currency:currency_id(id, code),
+          ownership_type,
+          investment_type,
+          status
+        `)
+        .order('name');
 
       if (assetsError) {
+        console.error('Assets query error:', assetsError);
         throw assetsError;
       }
 
@@ -39,7 +51,7 @@ const AssetList = () => {
       setAssets(assetsData || []);
     } catch (error) {
       console.error('Error fetching assets:', error);
-      setError('Failed to load assets. Please try again later.');
+      setError(error.message || 'Failed to load assets. Please try again later.');
     } finally {
       setLoading(false);
     }
