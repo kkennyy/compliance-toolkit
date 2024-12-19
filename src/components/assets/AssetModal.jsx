@@ -80,38 +80,21 @@ const AssetModal = ({ isOpen, onClose }) => {
       if (authError) throw new Error('Authentication error. Please sign in again.');
       if (!user) throw new Error('No authenticated user found');
 
-      // Create the asset
-      const { data: asset, error: assetError } = await supabase
-        .from('assets')
-        .insert([{
+      // Start a transaction
+      const { data: asset, error: assetError } = await supabase.rpc('create_asset_with_access', {
+        asset_data: {
           ...formData,
-          status: 'Pending' // Set initial status
-        }])
-        .select()
-        .single();
+          status: 'Pending'
+        },
+        user_id: user.id
+      });
 
       if (assetError) {
-        console.error('Supabase error details:', assetError);
-        throw new Error(assetError.message);
+        console.error('Error creating asset:', assetError);
+        throw new Error(assetError.message || 'Failed to create asset');
       }
 
-      console.log('Created asset:', asset);
-
-      // Grant access to the creator
-      const { error: accessError } = await supabase
-        .from('asset_access')
-        .insert([{
-          asset_id: asset.id,
-          user_id: user.id,
-          can_view: true,
-          can_edit: true
-        }]);
-
-      if (accessError) {
-        console.error('Access error details:', accessError);
-        throw new Error('Failed to set up asset access');
-      }
-
+      console.log('Created asset with access:', asset);
       onClose(true); // Refresh the asset list
     } catch (error) {
       console.error('Error creating asset:', error);

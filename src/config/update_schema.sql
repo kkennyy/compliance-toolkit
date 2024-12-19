@@ -118,24 +118,25 @@ create index if not exists idx_asset_access_user_id on asset_access(user_id);
 alter table asset_access enable row level security;
 
 -- Create policies for asset_access
-create policy "Users can view their own access"
-  on asset_access for select
-  to authenticated
-  using (auth.uid() = user_id);
+CREATE POLICY "Users can view their own access"
+  ON asset_access FOR SELECT
+  TO authenticated
+  USING (auth.uid() = user_id);
 
-create policy "Asset owners can manage access"
-  on asset_access for all
-  to authenticated
-  using (
-    exists (
-      select 1 from assets a
-      where a.id = asset_access.asset_id
-      and exists (
-        select 1 from asset_access aa
-        where aa.asset_id = a.id
-        and aa.user_id = auth.uid()
-        and aa.can_edit = true
-      )
+CREATE POLICY "Users can create initial access"
+  ON asset_access FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Asset editors can manage access"
+  ON asset_access FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM asset_access aa
+      WHERE aa.asset_id = asset_access.asset_id
+      AND aa.user_id = auth.uid()
+      AND aa.can_edit = true
     )
   );
 
@@ -423,30 +424,19 @@ ALTER TABLE currencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE asset_access ENABLE ROW LEVEL SECURITY;
 
--- Create RLS policies for assets
-CREATE POLICY "Users can view assets they have access to"
-  ON assets FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM asset_access aa
-      WHERE aa.asset_id = assets.id
-      AND aa.user_id = auth.uid()
-      AND aa.can_view = true
-    )
-  );
-
-CREATE POLICY "Users can edit assets they have edit access to"
-  ON assets FOR ALL
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM asset_access aa
-      WHERE aa.asset_id = assets.id
-      AND aa.user_id = auth.uid()
-      AND aa.can_edit = true
-    )
-  );
+-- Drop existing policies first
+DO $$ 
+BEGIN
+    EXECUTE (
+        SELECT string_agg(
+            format('DROP POLICY IF EXISTS %I ON %I', 
+                   pol.policyname, 
+                   pol.tablename),
+            '; ')
+        FROM pg_policies pol
+        WHERE pol.schemaname = 'public'
+    );
+END $$;
 
 -- Create RLS policies for reference data
 CREATE POLICY "Allow authenticated users to read business units"
@@ -463,6 +453,83 @@ CREATE POLICY "Allow authenticated users to read currencies"
   ON currencies FOR SELECT
   TO authenticated
   USING (true);
+
+-- Create RLS policies for asset_access
+CREATE POLICY "Users can view their own access"
+  ON asset_access FOR SELECT
+  TO authenticated
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create initial access"
+  ON asset_access FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Asset editors can manage access"
+  ON asset_access FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM asset_access aa
+      WHERE aa.asset_id = asset_access.asset_id
+      AND aa.user_id = auth.uid()
+      AND aa.can_edit = true
+    )
+  );
+
+-- Create RLS policies for assets
+CREATE POLICY "Users can view assets they have access to"
+  ON assets FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM asset_access aa
+      WHERE aa.asset_id = id
+      AND aa.user_id = auth.uid()
+      AND aa.can_view = true
+    )
+  );
+
+CREATE POLICY "Users can create assets"
+  ON assets FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+CREATE POLICY "Users can edit assets they have edit access to"
+  ON assets FOR UPDATE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM asset_access aa
+      WHERE aa.asset_id = id
+      AND aa.user_id = auth.uid()
+      AND aa.can_edit = true
+    )
+  );
+
+CREATE POLICY "Users can delete assets they have edit access to"
+  ON assets FOR DELETE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM asset_access aa
+      WHERE aa.asset_id = id
+      AND aa.user_id = auth.uid()
+      AND aa.can_edit = true
+    )
+  );
+
+-- Add unique constraint for codename if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_constraint 
+        WHERE conname = 'unique_codename'
+    ) THEN
+        ALTER TABLE assets ADD CONSTRAINT unique_codename UNIQUE (codename);
+    END IF;
+END$$;
 
 -- Re-create document policies with correct access control
 CREATE POLICY "Users can view documents they have access to"
@@ -495,3 +562,68 @@ CREATE POLICY "Users can insert documents for assets they have access to"
       )
     )
   );
+
+-- Create function to handle atomic asset creation with access
+CREATE OR REPLACE FUNCTION create_asset_with_access(
+  asset_data JSONB,
+  user_id UUID
+) RETURNS JSONB
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  new_asset assets;
+BEGIN
+  -- Create the asset
+  INSERT INTO assets (
+    name,
+    codename,
+    business_unit_id,
+    industry_id,
+    currency_id,
+    ownership_type,
+    investment_type,
+    status,
+    investment_amount,
+    investment_date,
+    target_exit_date
+  )
+  VALUES (
+    asset_data->>'name',
+    asset_data->>'codename',
+    (asset_data->>'business_unit_id')::uuid,
+    (asset_data->>'industry_id')::uuid,
+    (asset_data->>'currency_id')::uuid,
+    asset_data->>'ownership_type',
+    asset_data->>'investment_type',
+    asset_data->>'status',
+    (asset_data->>'investment_amount')::decimal,
+    (asset_data->>'investment_date')::date,
+    (asset_data->>'target_exit_date')::date
+  )
+  RETURNING * INTO new_asset;
+
+  -- Grant access to the creator
+  INSERT INTO asset_access (
+    asset_id,
+    user_id,
+    can_view,
+    can_edit
+  ) VALUES (
+    new_asset.id,
+    user_id,
+    true,
+    true
+  );
+
+  RETURN jsonb_build_object(
+    'id', new_asset.id,
+    'name', new_asset.name,
+    'status', new_asset.status
+  );
+END;
+$$;
+
+-- Grant execute permission to authenticated users
+GRANT EXECUTE ON FUNCTION create_asset_with_access TO authenticated;
