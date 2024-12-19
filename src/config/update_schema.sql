@@ -83,3 +83,339 @@ SELECT * FROM (VALUES
 WHERE NOT EXISTS (
     SELECT 1 FROM document_types WHERE name = v.name
 );
+
+-- Drop existing policies
+do $$ 
+declare
+  pol record;
+begin
+  for pol in (
+    select policyname, tablename 
+    from pg_policies 
+    where schemaname = 'public'
+  ) loop
+    execute format('drop policy if exists %I on %I', pol.policyname, pol.tablename);
+  end loop;
+end $$;
+
+-- Create asset access table first
+create table if not exists asset_access (
+  id uuid default uuid_generate_v4() primary key,
+  asset_id uuid references assets(id) on delete cascade,
+  user_id uuid references auth.users(id),
+  can_view boolean default true,
+  can_edit boolean default false,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(asset_id, user_id)
+);
+
+-- Add indexes for asset_access
+create index if not exists idx_asset_access_asset_id on asset_access(asset_id);
+create index if not exists idx_asset_access_user_id on asset_access(user_id);
+
+-- Enable RLS on asset_access
+alter table asset_access enable row level security;
+
+-- Create policies for asset_access
+create policy "Users can view their own access"
+  on asset_access for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "Asset owners can manage access"
+  on asset_access for all
+  to authenticated
+  using (
+    exists (
+      select 1 from assets a
+      where a.id = asset_access.asset_id
+      and exists (
+        select 1 from asset_access aa
+        where aa.asset_id = a.id
+        and aa.user_id = auth.uid()
+        and aa.can_edit = true
+      )
+    )
+  );
+
+-- Grant all users access to their own assets by default
+insert into asset_access (asset_id, user_id, can_view, can_edit)
+select id, auth.uid(), true, true
+from assets
+where not exists (
+  select 1 from asset_access
+  where asset_access.asset_id = assets.id
+  and asset_access.user_id = auth.uid()
+);
+
+-- Reference Data Tables
+create table if not exists business_units (
+  id uuid default uuid_generate_v4() primary key,
+  name text not null unique,
+  description text,
+  active boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table if not exists industries (
+  id uuid default uuid_generate_v4() primary key,
+  name text not null unique,
+  description text,
+  sector text,
+  risk_level text check (risk_level in ('Low', 'Medium', 'High')),
+  active boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table if not exists currencies (
+  id uuid default uuid_generate_v4() primary key,
+  code text not null unique,
+  name text not null,
+  symbol text,
+  active boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Asset History Tracking
+create table if not exists asset_history (
+  id uuid default uuid_generate_v4() primary key,
+  asset_id uuid references assets(id) on delete cascade,
+  user_id uuid references auth.users(id),
+  change_type text not null check (change_type in ('created', 'updated', 'deleted', 'status_change', 'compliance_update')),
+  changes jsonb not null,
+  metadata jsonb,
+  ip_address text,
+  user_agent text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Add foreign key constraints to assets table if they don't exist
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'assets' and column_name = 'business_unit_id') then
+    alter table assets add column business_unit_id uuid references business_units(id);
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'assets' and column_name = 'industry_id') then
+    alter table assets add column industry_id uuid references industries(id);
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'assets' and column_name = 'currency_id') then
+    alter table assets add column currency_id uuid references currencies(id);
+  end if;
+end $$;
+
+-- Create indexes
+create index if not exists idx_asset_history_asset_id on asset_history(asset_id);
+create index if not exists idx_asset_history_user_id on asset_history(user_id);
+create index if not exists idx_asset_history_change_type on asset_history(change_type);
+create index if not exists idx_asset_history_created_at on asset_history(created_at);
+create index if not exists idx_asset_history_metadata on asset_history using gin (metadata);
+create index if not exists idx_asset_history_changes on asset_history using gin (changes);
+
+-- Create function to update updated_at timestamp
+create or replace function update_updated_at_column()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+-- Create triggers for updated_at
+drop trigger if exists update_business_units_updated_at on business_units;
+create trigger update_business_units_updated_at
+  before update on business_units
+  for each row
+  execute function update_updated_at_column();
+
+drop trigger if exists update_industries_updated_at on industries;
+create trigger update_industries_updated_at
+  before update on industries
+  for each row
+  execute function update_updated_at_column();
+
+drop trigger if exists update_currencies_updated_at on currencies;
+create trigger update_currencies_updated_at
+  before update on currencies
+  for each row
+  execute function update_updated_at_column();
+
+-- Create function to track asset history
+create or replace function track_asset_history()
+returns trigger as $$
+declare
+  changes_json jsonb;
+  change_type text;
+  metadata_json jsonb;
+begin
+  -- Get request metadata
+  metadata_json := jsonb_build_object(
+    'ip_address', current_setting('request.headers', true)::jsonb->>'x-forwarded-for',
+    'user_agent', current_setting('request.headers', true)::jsonb->>'user-agent',
+    'session_id', current_setting('request.jwt.claim.session_id', true),
+    'timestamp', timezone('utc'::text, now())
+  );
+
+  if TG_OP = 'INSERT' then
+    change_type := 'created';
+    changes_json := jsonb_build_object(
+      'fields', to_jsonb(new),
+      'related_entities', jsonb_build_object(
+        'business_unit', (select name from business_units where id = new.business_unit_id),
+        'industry', (select name from industries where id = new.industry_id)
+      )
+    );
+  elsif TG_OP = 'UPDATE' then
+    -- Determine change type and track specific changes
+    if new.status <> old.status then
+      change_type := 'status_change';
+      changes_json := jsonb_build_object(
+        'previous_status', old.status,
+        'new_status', new.status,
+        'duration_in_previous_status', 
+          extract(epoch from (now() - (
+            select created_at 
+            from asset_history 
+            where asset_id = new.id 
+            and change_type = 'status_change'
+            order by created_at desc 
+            limit 1
+          )))
+      );
+    elsif new.compliance_status <> old.compliance_status then
+      change_type := 'compliance_update';
+      changes_json := jsonb_build_object(
+        'previous_status', old.compliance_status,
+        'new_status', new.compliance_status,
+        'compliance_details', jsonb_build_object(
+          'previous_risk_rating', old.risk_rating,
+          'new_risk_rating', new.risk_rating,
+          'previous_evaluation_date', old.evaluation_date,
+          'new_evaluation_date', new.evaluation_date
+        )
+      );
+    else
+      change_type := 'updated';
+      changes_json := jsonb_build_object(
+        'previous', to_jsonb(old),
+        'new', to_jsonb(new),
+        'changed_fields', (
+          select jsonb_object_agg(key, value)
+          from jsonb_each(to_jsonb(new))
+          where to_jsonb(new)->key <> to_jsonb(old)->key
+        )
+      );
+    end if;
+  else
+    change_type := 'deleted';
+    changes_json := jsonb_build_object(
+      'final_state', to_jsonb(old),
+      'related_entities', jsonb_build_object(
+        'business_unit', (select name from business_units where id = old.business_unit_id),
+        'industry', (select name from industries where id = old.industry_id)
+      )
+    );
+  end if;
+
+  -- Insert into asset_history with enhanced tracking
+  insert into asset_history (
+    asset_id,
+    user_id,
+    change_type,
+    changes,
+    metadata,
+    ip_address,
+    user_agent
+  ) values (
+    coalesce(new.id, old.id),
+    auth.uid(),
+    change_type,
+    changes_json,
+    metadata_json,
+    current_setting('request.headers', true)::jsonb->>'x-forwarded-for',
+    current_setting('request.headers', true)::jsonb->>'user-agent'
+  );
+
+  return coalesce(new, old);
+end;
+$$ language plpgsql security definer;
+
+-- Create triggers for asset history
+drop trigger if exists track_asset_changes on assets;
+create trigger track_asset_changes
+  after insert or update or delete on assets
+  for each row
+  execute function track_asset_history();
+
+-- Insert initial reference data
+insert into currencies (code, name, symbol)
+values
+  ('USD', 'US Dollar', '$'),
+  ('EUR', 'Euro', '€'),
+  ('GBP', 'British Pound', '£'),
+  ('SGD', 'Singapore Dollar', 'S$')
+on conflict (code) do nothing;
+
+-- Enable RLS
+alter table business_units enable row level security;
+alter table industries enable row level security;
+alter table currencies enable row level security;
+alter table asset_history enable row level security;
+
+-- Create RLS policies
+create policy "Allow read access to reference data for authenticated users"
+  on business_units for select
+  to authenticated
+  using (true);
+
+create policy "Allow read access to reference data for authenticated users"
+  on industries for select
+  to authenticated
+  using (true);
+
+create policy "Allow read access to reference data for authenticated users"
+  on currencies for select
+  to authenticated
+  using (true);
+
+create policy "Allow read access to asset history for authenticated users"
+  on asset_history for select
+  to authenticated
+  using (true);
+
+-- Re-create document policies with correct access control
+create policy "Users can view documents they have access to"
+  on documents for select
+  to authenticated
+  using (
+    exists (
+      select 1 from assets a
+      where a.id = documents.asset_id
+      and exists (
+        select 1 from asset_access aa
+        where aa.asset_id = a.id
+        and aa.user_id = auth.uid()
+      )
+    )
+  );
+
+create policy "Users can insert documents for assets they have access to"
+  on documents for insert
+  to authenticated
+  with check (
+    exists (
+      select 1 from assets a
+      where a.id = documents.asset_id
+      and exists (
+        select 1 from asset_access aa
+        where aa.asset_id = a.id
+        and aa.user_id = auth.uid()
+        and aa.can_edit = true
+      )
+    )
+  );
