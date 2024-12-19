@@ -27,19 +27,41 @@ const AssetList = () => {
       if (authError) throw new Error('Authentication error. Please sign in again.');
       if (!user) throw new Error('No authenticated user found');
 
+      // First get the asset access records for the user
+      const { data: accessData, error: accessError } = await supabase
+        .from('asset_access')
+        .select('asset_id, can_view, can_edit')
+        .eq('user_id', user.id)
+        .eq('can_view', true);
+
+      if (accessError) {
+        console.error('Access query error:', accessError);
+        throw accessError;
+      }
+
+      if (!accessData || accessData.length === 0) {
+        console.log('No assets found with access');
+        setAssets([]);
+        return;
+      }
+
+      const assetIds = accessData.map(a => a.asset_id);
+
+      // Then get the assets with their related data
       const { data: assetsData, error: assetsError } = await supabase
         .from('assets')
         .select(`
           id,
           name,
           codename,
-          business_unit:business_unit_id(id, name),
-          industry:industry_id(id, name),
-          currency:currency_id(id, code),
+          business_unit:business_units!inner(id, name),
+          industry:industries!inner(id, name),
+          currency:currencies!inner(id, code),
           ownership_type,
           investment_type,
           status
         `)
+        .in('id', assetIds)
         .order('name');
 
       if (assetsError) {
@@ -48,7 +70,14 @@ const AssetList = () => {
       }
 
       console.log('Fetched assets:', assetsData); // Debug log
-      setAssets(assetsData || []);
+      
+      // Combine asset data with access info
+      const assetsWithAccess = assetsData.map(asset => ({
+        ...asset,
+        access: accessData.find(a => a.asset_id === asset.id)
+      }));
+
+      setAssets(assetsWithAccess || []);
     } catch (error) {
       console.error('Error fetching assets:', error);
       setError(error.message || 'Failed to load assets. Please try again later.');
