@@ -1,6 +1,43 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Drop existing policies and triggers
+DO $$ 
+DECLARE
+    pol record;
+    trg record;
+BEGIN
+    -- Drop policies
+    FOR pol IN (
+        SELECT policyname, tablename 
+        FROM pg_policies 
+        WHERE schemaname = 'public'
+    ) LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename);
+    END LOOP;
+
+    -- Drop non-system triggers
+    FOR trg IN (
+        SELECT tgname, relname
+        FROM pg_trigger t
+        JOIN pg_class c ON t.tgrelid = c.oid
+        WHERE c.relnamespace = 'public'::regnamespace
+        AND NOT tgname LIKE 'RI_ConstraintTrigger_%'  -- Exclude foreign key triggers
+        AND tgname NOT IN (
+            'track_asset_changes',  -- Preserve asset tracking trigger
+            'update_updated_at_column'  -- Preserve timestamp trigger
+        )
+    ) LOOP
+        EXECUTE format('DROP TRIGGER IF EXISTS %I ON %I', trg.tgname, trg.relname);
+    END LOOP;
+
+    -- Drop specific triggers
+    EXECUTE 'DROP TRIGGER IF EXISTS track_asset_changes ON assets';
+    EXECUTE 'DROP TRIGGER IF EXISTS update_updated_at_column ON business_units';
+    EXECUTE 'DROP TRIGGER IF EXISTS update_updated_at_column ON industries';
+    EXECUTE 'DROP TRIGGER IF EXISTS update_updated_at_column ON currencies';
+END $$;
+
 -- Document Types
 CREATE TABLE IF NOT EXISTS document_types (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -210,8 +247,8 @@ CREATE TABLE IF NOT EXISTS business_units (
   name TEXT NOT NULL UNIQUE,
   description TEXT,
   active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS industries (
@@ -221,8 +258,8 @@ CREATE TABLE IF NOT EXISTS industries (
   sector TEXT,
   risk_level TEXT CHECK (risk_level IN ('Low', 'Medium', 'High')),
   active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS currencies (
@@ -231,8 +268,26 @@ CREATE TABLE IF NOT EXISTS currencies (
   name TEXT NOT NULL,
   symbol TEXT,
   active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Assets
+CREATE TABLE IF NOT EXISTS assets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    codename VARCHAR(255),
+    business_unit_id UUID REFERENCES business_units(id),
+    industry_id UUID REFERENCES industries(id),
+    currency_id UUID REFERENCES currencies(id),
+    ownership_type VARCHAR(50),
+    investment_type VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'pending',
+    investment_amount DECIMAL(18,2),
+    investment_date DATE,
+    target_exit_date DATE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Asset History Tracking

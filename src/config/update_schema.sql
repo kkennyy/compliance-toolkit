@@ -353,69 +353,145 @@ create trigger track_asset_changes
   execute function track_asset_history();
 
 -- Insert initial reference data
-insert into currencies (code, name, symbol)
-values
-  ('USD', 'US Dollar', '$'),
-  ('EUR', 'Euro', '€'),
-  ('GBP', 'British Pound', '£'),
-  ('SGD', 'Singapore Dollar', 'S$')
-on conflict (code) do nothing;
+INSERT INTO business_units (name, description, active)
+VALUES
+  ('Corporate Finance', 'Corporate Finance and Investment Division', true),
+  ('Asset Management', 'Asset Management and Portfolio Services', true),
+  ('Private Equity', 'Private Equity Investments', true),
+  ('Real Estate', 'Real Estate Investment and Development', true)
+ON CONFLICT (name) DO NOTHING;
 
--- Enable RLS
-alter table business_units enable row level security;
-alter table industries enable row level security;
-alter table currencies enable row level security;
-alter table asset_history enable row level security;
+INSERT INTO industries (name, description, sector, risk_level, active)
+VALUES
+  ('Technology', 'Software and Technology Services', 'Information Technology', 'Medium', true),
+  ('Healthcare', 'Healthcare Services and Equipment', 'Healthcare', 'Low', true),
+  ('Real Estate', 'Commercial and Residential Properties', 'Real Estate', 'Medium', true),
+  ('Financial Services', 'Banking and Financial Services', 'Finance', 'High', true),
+  ('Manufacturing', 'Industrial Manufacturing', 'Industrial', 'Medium', true)
+ON CONFLICT (name) DO NOTHING;
 
--- Create RLS policies
-create policy "Allow read access to reference data for authenticated users"
-  on business_units for select
-  to authenticated
-  using (true);
+INSERT INTO currencies (code, name, symbol, active)
+VALUES
+  ('USD', 'US Dollar', '$', true),
+  ('EUR', 'Euro', '€', true),
+  ('GBP', 'British Pound', '£', true),
+  ('SGD', 'Singapore Dollar', 'S$', true)
+ON CONFLICT (code) DO NOTHING;
 
-create policy "Allow read access to reference data for authenticated users"
-  on industries for select
-  to authenticated
-  using (true);
+INSERT INTO assets (
+  name, 
+  codename, 
+  business_unit_id,
+  industry_id,
+  currency_id,
+  ownership_type,
+  investment_type,
+  status,
+  investment_amount,
+  investment_date,
+  target_exit_date
+)
+SELECT 
+  'Tech Innovators Ltd',
+  'Project Alpha',
+  (SELECT id FROM business_units WHERE name = 'Private Equity'),
+  (SELECT id FROM industries WHERE name = 'Technology'),
+  (SELECT id FROM currencies WHERE code = 'USD'),
+  'Direct',
+  'Growth Equity',
+  'Active',
+  5000000,
+  '2023-01-15',
+  '2026-01-15'
+WHERE NOT EXISTS (
+  SELECT 1 FROM assets WHERE codename = 'Project Alpha'
+);
 
-create policy "Allow read access to reference data for authenticated users"
-  on currencies for select
-  to authenticated
-  using (true);
+INSERT INTO asset_access (asset_id, user_id, can_view, can_edit)
+SELECT a.id, auth.uid(), true, true
+FROM assets a
+WHERE NOT EXISTS (
+  SELECT 1 FROM asset_access aa
+  WHERE aa.asset_id = a.id
+  AND aa.user_id = auth.uid()
+);
 
-create policy "Allow read access to asset history for authenticated users"
-  on asset_history for select
-  to authenticated
-  using (true);
+-- Enable RLS on all tables
+ALTER TABLE business_units ENABLE ROW LEVEL SECURITY;
+ALTER TABLE industries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE currencies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE asset_access ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policies for assets
+CREATE POLICY "Users can view assets they have access to"
+  ON assets FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM asset_access aa
+      WHERE aa.asset_id = assets.id
+      AND aa.user_id = auth.uid()
+      AND aa.can_view = true
+    )
+  );
+
+CREATE POLICY "Users can edit assets they have edit access to"
+  ON assets FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM asset_access aa
+      WHERE aa.asset_id = assets.id
+      AND aa.user_id = auth.uid()
+      AND aa.can_edit = true
+    )
+  );
+
+-- Create RLS policies for reference data
+CREATE POLICY "Allow read access to reference data for authenticated users"
+  ON business_units FOR SELECT
+  TO authenticated
+  USING (true);
+
+CREATE POLICY "Allow read access to reference data for authenticated users"
+  ON industries FOR SELECT
+  TO authenticated
+  USING (true);
+
+CREATE POLICY "Allow read access to reference data for authenticated users"
+  ON currencies FOR SELECT
+  TO authenticated
+  USING (true);
 
 -- Re-create document policies with correct access control
-create policy "Users can view documents they have access to"
-  on documents for select
-  to authenticated
-  using (
-    exists (
-      select 1 from assets a
-      where a.id = documents.asset_id
-      and exists (
-        select 1 from asset_access aa
-        where aa.asset_id = a.id
-        and aa.user_id = auth.uid()
+CREATE POLICY "Users can view documents they have access to"
+  ON documents FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM assets a
+      WHERE a.id = documents.asset_id
+      AND EXISTS (
+        SELECT 1 FROM asset_access aa
+        WHERE aa.asset_id = a.id
+        AND aa.user_id = auth.uid()
       )
     )
   );
 
-create policy "Users can insert documents for assets they have access to"
-  on documents for insert
-  to authenticated
-  with check (
-    exists (
-      select 1 from assets a
-      where a.id = documents.asset_id
-      and exists (
-        select 1 from asset_access aa
-        where aa.asset_id = a.id
-        and aa.user_id = auth.uid()
-        and aa.can_edit = true
+CREATE POLICY "Users can insert documents for assets they have access to"
+  ON documents FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM assets a
+      WHERE a.id = documents.asset_id
+      AND EXISTS (
+        SELECT 1 FROM asset_access aa
+        WHERE aa.asset_id = a.id
+        AND aa.user_id = auth.uid()
+        AND aa.can_edit = true
       )
     )
   );
