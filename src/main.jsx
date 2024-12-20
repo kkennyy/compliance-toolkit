@@ -6,7 +6,7 @@ import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter basename="/compliance-toolkit">
+    <BrowserRouter>
       <App />
     </BrowserRouter>
   </React.StrictMode>,
